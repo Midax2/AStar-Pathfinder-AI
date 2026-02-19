@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A* vs AI Pathfinding Comparison</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Toast notification container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="container">
+        <div class="header">
+            <h1>A* vs AI Pathfinding</h1>
+            <p>Compare Classical Algorithm with Deep Learning</p>
+        </div>
+
+        <!-- Training Section -->
+        <div class="card">
+            <h2>Train AI Model</h2>
+            <div class="form-group">
+                <label for="episodes">Training Episodes (500 - 10000)</label>
+                <input type="number" id="episodes" value="3000" min="500" max="10000" step="100">
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" onclick="trainModel()">
+                    <span id="trainBtnText">Start Training</span>
+                </button>
+            </div>
+            <div id="trainingProgress" style="display: none; margin-top: 20px;">
+                <div style="margin-bottom: 10px;">
+                    <strong>Progress:</strong> <span id="progressText">0 / 0 episodes (0%)</span>
+                </div>
+                <div style="background: #e0e0e0; border-radius: 10px; height: 24px; overflow: hidden; position: relative;">
+                    <div id="progressBar" style="background: linear-gradient(90deg, #4CAF50, #8BC34A); height: 100%; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center;">
+                        <span id="progressPercent" style="color: white; font-weight: bold; font-size: 12px; position: absolute; left: 50%; transform: translateX(-50%);"></span>
+                    </div>
+                </div>
+                <div style="margin-top: 8px; font-size: 0.9em; color: #666;">
+                    <strong>Current Loss:</strong> <span id="currentLoss">-</span>
+                </div>
+            </div>
+            <div id="trainingStatus" class="status"></div>
+            <div id="trainingInfo" class="training-info" style="display: none;"></div>
+        </div>
+
+        <!-- Comparison Section -->
+        <div class="card">
+            <h2>Compare Pathfinding</h2>
+            <div class="form-group">
+                <label for="startNode">Start Node</label>
+                <select id="startNode">
+                    <option value="">Loading nodes...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="endNode">End Node</label>
+                <select id="endNode">
+                    <option value="">Loading nodes...</option>
+                </select>
+            </div>
+            <div class="button-group">
+                <button class="btn-primary" onclick="compareAlgorithms()">
+                    <span id="compareBtnText">Run Comparison</span>
+                </button>
+            </div>
+            <div id="comparisonStatus" class="status"></div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" style="display: none;">
+            <div class="card">
+                <h2>Comparison Results</h2>
+
+                <div class="result-card" style="background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%); border: none; margin-bottom: 20px;">
+                    <h3 style="color: #2d3436; font-size: 1.3em;">
+                        Winner: <span id="winner"></span>
+                    </h3>
+                </div>
+
+                <div class="results-grid">
+                    <!-- A* Results -->
+                    <div class="result-card">
+                        <h3>
+                            <span class="badge badge-astar">A* Algorithm</span>
+                        </h3>
+                        <div class="metric">
+                            <span class="metric-label">Path Length:</span>
+                            <span class="metric-value" id="astarNodes">-</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Total Distance:</span>
+                            <span class="metric-value" id="astarDistance">-</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Execution Time:</span>
+                            <span class="metric-value" id="astarTime">-</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Nodes Visited:</span>
+                            <span class="metric-value" id="astarVisited">-</span>
+                        </div>
+                        <div class="path-display" id="astarPath"></div>
+                    </div>
+
+                    <!-- AI Results -->
+                    <div class="result-card">
+                        <h3>
+                            <span class="badge badge-ai">AI (DQN)</span>
+                        </h3>
+                        <div class="metric">
+                            <span class="metric-label">Path Length:</span>
+                            <span class="metric-value" id="aiNodes">-</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Total Distance:</span>
+                            <span class="metric-value" id="aiDistance">-</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Execution Time:</span>
+                            <span class="metric-value" id="aiTime">-</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Nodes Visited:</span>
+                            <span class="metric-value" id="aiVisited">-</span>
+                        </div>
+                        <div class="path-display" id="aiPath"></div>
+                    </div>
+                </div>
+
+                <div class="analysis" id="analysisNotes"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
