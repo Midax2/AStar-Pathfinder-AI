@@ -1,4 +1,8 @@
-// API base URL
+// Base URL for all API requests.
+// Empty string means relative URLs, which works when the frontend is served by the same
+// Spring Boot process (the default setup). To point at a separate backend (e.g. during
+// local frontend development or a split deployment), set this to the full origin:
+//   const API_BASE = 'http://localhost:8080';
 const API_BASE = '';
 
 // Global error handler for uncaught errors
@@ -43,7 +47,6 @@ async function loadNodes() {
         console.error('Error loading nodes:', error);
         const errorMsg = `Failed to load nodes from server: ${error.message}. Using default nodes.`;
         showToast(errorMsg, 'error', 10000);
-        alert(`⚠️ ERROR: ${errorMsg}\n\nPlease check if the server is running and the database is accessible.`);
         // Use fallback nodes
         populateNodesDropdown(['Atlanta', 'Boston', 'Chicago', 'Dallas', 'Denver',
             'Houston', 'Las Vegas', 'Los Angeles', 'Miami', 'New York',
@@ -241,7 +244,6 @@ async function checkTrainingStatus() {
         const errorMsg = `Failed to check training status: ${error.message}`;
         showToast(errorMsg, 'error', 7000);
         showStatus('trainingStatus', '❌ Could not check training status', 'error');
-        alert(`⚠️ STATUS CHECK FAILED\n\n${errorMsg}\n\nThe server may be unavailable.`);
     }
 }
 
@@ -303,7 +305,6 @@ async function checkDatabaseHealth() {
 
         if (data.status === 'HEALTHY') {
             showToast('✅ Database is healthy!', 'success', 5000);
-            alert(healthReport);
         } else if (data.status === 'UNHEALTHY') {
             showToast('❌ Database is UNHEALTHY!', 'error', 10000);
             healthReport += `\n\n⚠️ ACTION REQUIRED:\n`;
@@ -312,17 +313,14 @@ async function checkDatabaseHealth() {
             healthReport += `3. Copy/paste entire neo4j/import/init.cypher\n`;
             healthReport += `4. Verify: MATCH ()-[r]->() RETURN count(r);\n`;
             healthReport += `\nSee reload-database.md for detailed instructions.`;
-            alert(healthReport);
         } else {
             showToast('⚠️ Health check encountered errors', 'error', 7000);
-            alert(healthReport);
         }
 
     } catch (error) {
         console.error('Health check error:', error);
         const errorMsg = `Database health check failed: ${error.message}`;
         showToast(errorMsg, 'error', 10000);
-        alert(`❌ HEALTH CHECK FAILED\n\n${errorMsg}\n\nPlease ensure:\n- Neo4j is running (docker ps)\n- Server is running\n- Database is accessible`);
     } finally {
         btn.innerHTML = originalText;
     }
@@ -368,7 +366,6 @@ async function compareAlgorithms() {
             }
             showStatus('comparisonStatus', '❌ Comparison failed: ' + errorMessage, 'error');
             showToast('Comparison Failed: ' + errorMessage, 'error', 10000);
-            alert(`❌ COMPARISON FAILED\n\n${errorMessage}\n\nPlease check:\n- Model is trained\n- Selected nodes exist\n- Path exists between nodes`);
             return;
         }
 
@@ -381,7 +378,6 @@ async function compareAlgorithms() {
         const errorMsg = `Network error during comparison: ${error.message}`;
         showStatus('comparisonStatus', '❌ ' + errorMsg, 'error');
         showToast(errorMsg, 'error', 10000);
-        alert(`❌ NETWORK ERROR\n\n${errorMsg}\n\nPlease check:\n- Server is running\n- Network connection\n- Both algorithms can process the request`);
         console.error('Comparison exception:', error);
     } finally {
         btn.innerHTML = originalText;
@@ -499,20 +495,19 @@ function showToast(message, type = 'info', duration = 5000) {
     toast.innerHTML = `
         <span class="toast-icon">${icons[type] || 'ℹ️'}</span>
         <div class="toast-message">${message}</div>
-        <button class="toast-close" onclick="closeToast(this)" aria-label="Close">×</button>
+        <button class="toast-close" onclick="closeToast(this.parentElement)" aria-label="Close">×</button>
     `;
 
     container.appendChild(toast);
 
     // Auto-remove after duration
     setTimeout(() => {
-        closeToast(toast.querySelector('.toast-close'));
+        closeToast(toast);
     }, duration);
 }
 
 // Close toast notification
-function closeToast(button) {
-    const toast = button.parentElement || button;
+function closeToast(toast) {
     toast.classList.add('hiding');
     setTimeout(() => {
         toast.remove();

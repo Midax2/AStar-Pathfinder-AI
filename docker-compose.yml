@@ -6,7 +6,7 @@ services:
       - "7474:7474"
       - "7687:7687"
     environment:
-      - NEO4J_AUTH=${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-password}
+      - NEO4J_AUTH=${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD}
       - NEO4J_apoc_export_file_enabled=true
       - NEO4J_apoc_import_file_enabled=true
       - NEO4J_apoc_import_file_use__neo4j__config=true
@@ -16,7 +16,7 @@ services:
       - neo4j_logs:/logs
       - ./neo4j/import:/var/lib/neo4j/import
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u ${NEO4J_USERNAME:-neo4j} -p ${NEO4J_PASSWORD:-password} 'RETURN 1' || exit 1"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7474"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -28,7 +28,7 @@ services:
         condition: service_healthy
     volumes:
       - ./neo4j/import:/var/lib/neo4j/import
-    entrypoint: ["bash","-c","cypher-shell -a neo4j://neo4j:7687 -u ${NEO4J_USERNAME:-neo4j} -p ${NEO4J_PASSWORD:-password} -f /var/lib/neo4j/import/init.cypher && echo 'Neo4j init script applied'"]
+    entrypoint: ["bash","-c","set -e; echo 'Running Neo4j init script...'; cypher-shell -a neo4j://neo4j:7687 -u ${NEO4J_USERNAME:-neo4j} -p ${NEO4J_PASSWORD} -f /var/lib/neo4j/import/init.cypher; echo 'Neo4j init script applied successfully'"]
     restart: "no"
 
 volumes:

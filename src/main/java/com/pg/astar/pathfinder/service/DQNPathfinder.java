@@ -1,5 +1,6 @@
 package com.pg.astar.pathfinder.service;
 
+import com.pg.astar.pathfinder.config.DqnHyperparametersProperties;
 import com.pg.astar.pathfinder.entity.EdgeEntity;
 import com.pg.astar.pathfinder.entity.NodeEntity;
 import com.pg.astar.pathfinder.repository.NodeRepository;
@@ -34,6 +35,7 @@ public class DQNPathfinder {
 
   private final NodeRepository nodeRepository;
   private final AStarPathfinder aStarPathfinder;
+  private final DqnHyperparametersProperties hp;
   private MultiLayerNetwork model;
   @Getter private boolean isTrained = false;
   @Getter private int nodesVisited = 0;
@@ -45,19 +47,6 @@ public class DQNPathfinder {
   }
 
   @Setter private ProgressCallback progressCallback;
-
-  // Hyperparameters
-  private static final double LEARNING_RATE = 0.00001; // 10x lower - prevent any overshooting
-  private static final double GAMMA = 0.9; // Lower discount - focus on immediate rewards
-  private static final double EPSILON = 0.1; // Lower exploration
-  private static final int INPUT_SIZE = 10;
-  private static final int HIDDEN_SIZE = 64; // Reduced network size for stability
-  private static final int HIDDEN_SIZE_2 = 32; // Smaller second layer
-  private static final int OUTPUT_SIZE = 64;
-  private static final int BATCH_SIZE = 16; // Smaller batches for more stable updates
-  private static final int TRAINING_FREQUENCY = 5; // Less frequent training
-  private static final double MAX_REWARD = 10.0; // Much smaller rewards (10x reduction)
-  private static final double GRADIENT_CLIP_NORM = 0.5; // Much stricter clipping
 
   @PostConstruct
   public void initialize() {
@@ -71,31 +60,31 @@ public class DQNPathfinder {
         new NeuralNetConfiguration.Builder()
             .seed(12345)
             .weightInit(WeightInit.XAVIER)
-            .updater(new Adam(LEARNING_RATE))
+            .updater(new Adam(hp.getLearningRate()))
             .gradientNormalization(
                 org.deeplearning4j.nn.conf.GradientNormalization
                     .ClipElementWiseAbsoluteValue) // Clip gradients
-            .gradientNormalizationThreshold(GRADIENT_CLIP_NORM) // Threshold for clipping
+            .gradientNormalizationThreshold(hp.getGradientClipNorm()) // Threshold for clipping
             .list()
             .layer(
                 0,
                 new DenseLayer.Builder()
-                    .nIn(INPUT_SIZE)
-                    .nOut(HIDDEN_SIZE)
+                    .nIn(hp.getInputSize())
+                    .nOut(hp.getHiddenSize())
                     .activation(Activation.RELU)
                     .build())
             .layer(
                 1,
                 new DenseLayer.Builder()
-                    .nIn(HIDDEN_SIZE)
-                    .nOut(HIDDEN_SIZE_2)
+                    .nIn(hp.getHiddenSize())
+                    .nOut(hp.getHiddenSize2())
                     .activation(Activation.RELU)
                     .build())
             .layer(
                 2,
                 new OutputLayer.Builder(LossFunctions.LossFunction.MSE)
-                    .nIn(HIDDEN_SIZE_2)
-                    .nOut(OUTPUT_SIZE)
+                    .nIn(hp.getHiddenSize2())
+                    .nOut(hp.getOutputSize())
                     .activation(Activation.IDENTITY)
                     .build())
             .build();
@@ -105,7 +94,7 @@ public class DQNPathfinder {
     log.info(
         "Neural network initialized with {} parameters and gradient clipping at {}",
         model.numParams(),
-        GRADIENT_CLIP_NORM);
+        hp.getGradientClipNorm());
   }
 
   /**
@@ -243,22 +232,22 @@ public class DQNPathfinder {
 
       // Calculate reward for following optimal path (tiny scale)
       double remainingSteps = optimalPath.size() - i - 1;
-      double reward = MAX_REWARD * 0.8 + (MAX_REWARD * 0.2 / (remainingSteps + 1));
+      double reward = hp.getMaxReward() * 0.8 + (hp.getMaxReward() * 0.2 / (remainingSteps + 1));
       // Ranges from 8.0 to 10.0 (10x smaller than before)
 
       // Set target Q-value for the optimal action
       INDArray target = qValues.dup();
       int actionIndex = getActionIndex(current, optimalNext);
 
-      if (actionIndex >= 0 && actionIndex < OUTPUT_SIZE) {
-        // For optimal actions, set target value (capped at MAX_REWARD)
-        target.putScalar(0, actionIndex, Math.min(reward, MAX_REWARD));
+      if (actionIndex >= 0 && actionIndex < hp.getOutputSize()) {
+        // For optimal actions, set target value (capped at hp.getMaxReward())
+        target.putScalar(0, actionIndex, Math.min(reward, hp.getMaxReward()));
 
         // Gently penalize other actions (less aggressive)
         for (EdgeEntity edge : current.getRoutes()) {
           if (!edge.targetNode().getName().equals(optimalNext.getName())) {
             int otherAction = getActionIndex(current, edge.targetNode());
-            if (otherAction >= 0 && otherAction < OUTPUT_SIZE) {
+            if (otherAction >= 0 && otherAction < hp.getOutputSize()) {
               double currentQ = qValues.getDouble(0, otherAction);
               // Reduce by only 20% to avoid large negative values
               target.putScalar(0, otherAction, currentQ * 0.8);
@@ -309,11 +298,11 @@ public class DQNPathfinder {
         break; // Dead end
       }
 
-      // Choose action (epsilon-greedy with distance heuristic bias)
+      // Choose action (hp.getEpsilon()-greedy with distance heuristic bias)
       NodeEntity nextNode;
       double reward;
 
-      if (Math.random() < EPSILON) {
+      if (Math.random() < hp.getEpsilon()) {
         // Explore: but prefer closer neighbors (guided exploration)
         List<EdgeEntity> routes = new ArrayList<>(current.getRoutes());
 
@@ -372,7 +361,7 @@ public class DQNPathfinder {
 
       // Extremely conservative reward structure (all values 10x smaller)
       if (nextNode.getName().equals(goal.getName())) {
-        reward = MAX_REWARD; // Maximum reward = 10.0
+        reward = hp.getMaxReward(); // Maximum reward
       } else if (distanceToGoal < previousDistance) {
         // Reward for moving closer (very small scale)
         double improvement = (previousDistance - distanceToGoal) / 1000.0;
@@ -392,7 +381,7 @@ public class DQNPathfinder {
       reward -= 0.1; // Reduced from 1.0
 
       // Clip reward to tiny range
-      reward = Math.max(-MAX_REWARD, Math.min(MAX_REWARD, reward));
+      reward = Math.max(-hp.getMaxReward(), Math.min(hp.getMaxReward(), reward));
 
       // CRITICAL: Check for NaN
       if (Double.isNaN(reward) || Double.isInfinite(reward)) {
@@ -419,9 +408,9 @@ public class DQNPathfinder {
 
       // Clip maxNextQ to reasonable range (smaller bounds)
       maxNextQ =
-          Math.max(-MAX_REWARD * 5, Math.min(MAX_REWARD * 5, maxNextQ)); // ±50 instead of ±1000
+          Math.max(-hp.getMaxReward() * 5, Math.min(hp.getMaxReward() * 5, maxNextQ)); // ±50 instead of ±1000
 
-      double targetQ = reward + GAMMA * maxNextQ;
+      double targetQ = reward + hp.getGamma() * maxNextQ;
 
       // Check for NaN in target Q
       if (Double.isNaN(targetQ) || Double.isInfinite(targetQ)) {
@@ -431,11 +420,11 @@ public class DQNPathfinder {
 
       // Clip final target Q-value to smaller range
       targetQ =
-          Math.max(-MAX_REWARD * 5, Math.min(MAX_REWARD * 5, targetQ)); // ±50 instead of ±1000
+          Math.max(-hp.getMaxReward() * 5, Math.min(hp.getMaxReward() * 5, targetQ)); // ±50 instead of ±1000
 
       // Update Q-value for the chosen action
       int actionIndex = getActionIndex(current, nextNode);
-      if (actionIndex >= 0 && actionIndex < OUTPUT_SIZE) {
+      if (actionIndex >= 0 && actionIndex < hp.getOutputSize()) {
         INDArray target = qValues.dup();
         target.putScalar(0, actionIndex, targetQ);
 
@@ -444,7 +433,7 @@ public class DQNPathfinder {
         targetBatch.add(target);
 
         // Train in batches for efficiency
-        if (stateBatch.size() >= BATCH_SIZE || steps % TRAINING_FREQUENCY == 0) {
+        if (stateBatch.size() >= hp.getBatchSize() || steps % hp.getTrainingFrequency() == 0) {
           if (!stateBatch.isEmpty()) {
             INDArray stateBatchArray = Nd4j.vstack(stateBatch);
             INDArray targetBatchArray = Nd4j.vstack(targetBatch);
@@ -524,7 +513,7 @@ public class DQNPathfinder {
       // This guides the AI to prefer neighbors that are closer to the goal
       INDArray biasedQValues = qValues.dup();
       List<EdgeEntity> routes = new ArrayList<>(current.getRoutes());
-      for (int i = 0; i < routes.size() && i < OUTPUT_SIZE; i++) {
+      for (int i = 0; i < routes.size() && i < hp.getOutputSize(); i++) {
         NodeEntity neighbor = routes.get(i).targetNode();
         double distanceToGoal =
             DistanceCalculationUtils.calculateHaversineDistance(
@@ -534,7 +523,7 @@ public class DQNPathfinder {
         // Add bonus for neighbors closer to goal (scaled heuristic)
         double heuristicBonus = 50.0 / (1.0 + distanceToGoal / 1000.0);
         int actionIndex = getActionIndex(current, neighbor);
-        if (actionIndex >= 0 && actionIndex < OUTPUT_SIZE) {
+        if (actionIndex >= 0 && actionIndex < hp.getOutputSize()) {
           double originalQ = qValues.getDouble(0, actionIndex);
           biasedQValues.putScalar(0, actionIndex, originalQ + heuristicBonus);
         }
@@ -569,6 +558,7 @@ public class DQNPathfinder {
               .add(current.getName());
 
           // Remove current node from path and visited
+          // Note: removeLast() requires Java 21+ (SequencedCollection interface)
           path.removeLast();
           visited.remove(current.getName());
           current = previousNode;
@@ -600,7 +590,7 @@ public class DQNPathfinder {
 
   /** Encode the current state as a feature vector */
   private INDArray encodeState(NodeEntity current, NodeEntity goal) {
-    double[] features = new double[INPUT_SIZE];
+    double[] features = new double[hp.getInputSize()];
 
     // Current position (normalized)
     features[0] = current.getLatitude() / 90.0;
@@ -628,7 +618,7 @@ public class DQNPathfinder {
     features[8] = (goal.getLatitude() - current.getLatitude()) / 180.0;
     features[9] = (goal.getLongitude() - current.getLongitude()) / 360.0;
 
-    return Nd4j.create(features, new int[] {1, INPUT_SIZE});
+    return Nd4j.create(features, new int[] {1, hp.getInputSize()});
   }
 
   /**
@@ -666,7 +656,7 @@ public class DQNPathfinder {
       NodeEntity candidate = edge.targetNode();
       int actionIndex = getActionIndex(current, candidate);
 
-      if (actionIndex >= 0 && actionIndex < OUTPUT_SIZE) {
+      if (actionIndex >= 0 && actionIndex < hp.getOutputSize()) {
         double q = qValues.getDouble(0, actionIndex);
         if (q > bestQ) {
           bestQ = q;
@@ -718,7 +708,7 @@ public class DQNPathfinder {
 
     for (EdgeEntity edge : routes) {
       int actionIndex = getActionIndex(current, edge.targetNode());
-      if (actionIndex >= 0 && actionIndex < OUTPUT_SIZE) {
+      if (actionIndex >= 0 && actionIndex < hp.getOutputSize()) {
         double q = qValues.getDouble(0, actionIndex);
         if (q > bestQ) {
           bestQ = q;
@@ -734,7 +724,7 @@ public class DQNPathfinder {
   private int getActionIndex(NodeEntity current, NodeEntity next) {
     // Use hash-based approach for action indexing
     String transition = current.getName() + "->" + next.getName();
-    return Math.abs(transition.hashCode() % OUTPUT_SIZE);
+    return Math.abs(transition.hashCode() % hp.getOutputSize());
   }
 
   /** Calculate bearing from one node to another */

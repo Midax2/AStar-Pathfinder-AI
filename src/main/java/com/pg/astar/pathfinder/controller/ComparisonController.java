@@ -1,5 +1,6 @@
 package com.pg.astar.pathfinder.controller;
 
+import com.pg.astar.pathfinder.config.TrainingSseProperties;
 import com.pg.astar.pathfinder.model.ComparisonResult;
 import com.pg.astar.pathfinder.model.TrainingProgress;
 import com.pg.astar.pathfinder.model.TrainingStatus;
@@ -7,6 +8,8 @@ import com.pg.astar.pathfinder.service.DQNPathfinder;
 import com.pg.astar.pathfinder.service.PathComparisonService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -23,6 +26,7 @@ public class ComparisonController {
 
   private final PathComparisonService comparisonService;
   private final DQNPathfinder dqnPathfinder;
+  private final TrainingSseProperties sseProperties;
   private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
   /**
@@ -137,7 +141,7 @@ public class ComparisonController {
    */
   @GetMapping(value = "/train-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   public SseEmitter trainWithProgress(@RequestParam(defaultValue = "3000") int episodes) {
-    SseEmitter emitter = new SseEmitter(600000L); // 10 minute timeout
+    SseEmitter emitter = new SseEmitter(Math.max(sseProperties.getMinTimeoutMs(), (long) episodes * sseProperties.getMsPerEpisode()));
 
     executorService.execute(
         () -> {
@@ -192,5 +196,18 @@ public class ComparisonController {
         });
 
     return emitter;
+  }
+
+  @PreDestroy
+  public void shutdown() {
+    executorService.shutdown();
+    try {
+      if (!executorService.awaitTermination(30, TimeUnit.SECONDS)) {
+        executorService.shutdownNow();
+      }
+    } catch (InterruptedException e) {
+      executorService.shutdownNow();
+      Thread.currentThread().interrupt();
+    }
   }
 }
